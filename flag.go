@@ -120,6 +120,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 // ErrHelp is the error returned if the flag -help is invoked but no such flag is defined.
@@ -969,18 +970,41 @@ func stripUnknownFlagValue(args []string) []string {
 	return nil
 }
 
+func splitFlagValue(s string) (dash, name, value string, hasValue bool) {
+	dashLen := 1
+	if s[1] == '-' {
+		dashLen = 2
+	}
+	dash = s[:dashLen]
+
+	name = s[dashLen:]
+	sep := strings.Index(name, "=")
+	if sp := strings.IndexFunc(name, unicode.IsSpace); sep == -1 || sp != -1 && sp < sep {
+		sep = sp
+	}
+	if sep != -1 {
+		if name[sep] == '=' {
+			name, value, hasValue = name[:sep], name[sep+1:], true
+		} else {
+			name, value, hasValue = name[:sep], name[sep:], true
+		}
+	}
+	return dash, name, value, hasValue
+}
+
 func (f *FlagSet) parseLongArg(s string, args []string, fn parseFunc) (a []string, err error) {
 	a = args
-	name := s[2:]
-	if len(name) == 0 || name[0] == '-' || name[0] == '=' {
+	dash, name, value, hasValue := splitFlagValue(s)
+	if len(name) == 0 || name[0] == '-' {
 		err = f.failf("bad flag syntax: %s", s)
 		return
 	}
 
-	split := strings.SplitN(name, "=", 2)
-	name = split[0]
-	flag, exists := f.formal[f.normalizeFlagName(name)]
-
+	normName := f.normalizeFlagName(name)
+	flag, exists := f.formal[normName]
+	if !exists && len([]byte(normName)) == 1 {
+		flag, exists = f.shorthands[normName[0]]
+	}
 	if !exists {
 		switch {
 		case name == "help":
@@ -989,21 +1013,23 @@ func (f *FlagSet) parseLongArg(s string, args []string, fn parseFunc) (a []strin
 		case f.ParseErrorsWhitelist.UnknownFlags:
 			// --unknown=unknownval arg ...
 			// we do not want to lose arg in this case
-			if len(split) >= 2 {
+			if hasValue {
 				return a, nil
 			}
 
 			return stripUnknownFlagValue(a), nil
 		default:
-			err = f.failf("unknown flag: --%s", name)
+			err = f.failf("unknown flag: %s%s", dash, name)
 			return
 		}
 	}
 
-	var value string
-	if len(split) == 2 {
+	if len(dash) == 1 && flag.ShorthandDeprecated != "" {
+		fmt.Fprintf(f.Output(), "Flag shorthand -%s has been deprecated, %s\n", flag.Shorthand, flag.ShorthandDeprecated)
+	}
+
+	if hasValue {
 		// '--flag=arg'
-		value = split[1]
 	} else if flag.NoOptDefVal != "" {
 		// '--flag' (arg was optional)
 		value = flag.NoOptDefVal
@@ -1119,16 +1145,12 @@ func (f *FlagSet) parseArgs(args []string, fn parseFunc) (err error) {
 			continue
 		}
 
-		if s[1] == '-' {
-			if len(s) == 2 { // "--" terminates the flags
-				f.argsLenAtDash = len(f.args)
-				f.args = append(f.args, args...)
-				break
-			}
-			args, err = f.parseLongArg(s, args, fn)
-		} else {
-			args, err = f.parseShortArg(s, args, fn)
+		if s[1] == '-' && len(s) == 2 { // "--" terminates the flags
+			f.argsLenAtDash = len(f.args)
+			f.args = append(f.args, args...)
+			break
 		}
+		args, err = f.parseLongArg(s, args, fn)
 		if err != nil {
 			return
 		}

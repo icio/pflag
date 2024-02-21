@@ -176,6 +176,9 @@ func testParse(f *FlagSet, t *testing.T) {
 	boolFlag := f.Bool("bool", false, "bool value")
 	bool2Flag := f.Bool("bool2", false, "bool2 value")
 	bool3Flag := f.Bool("bool3", false, "bool3 value")
+	bool4Flag := f.Bool("bool4", false, "bool4 value")
+	bool5Flag := f.Bool("bool5", false, "bool5 value")
+	bool6Flag := f.Bool("bool6", false, "bool6 value")
 	intFlag := f.Int("int", 0, "int value")
 	int8Flag := f.Int8("int8", 0, "int value")
 	int16Flag := f.Int16("int16", 0, "int value")
@@ -201,6 +204,9 @@ func testParse(f *FlagSet, t *testing.T) {
 		"--bool",
 		"--bool2=true",
 		"--bool3=false",
+		"-bool4",
+		"-bool5=true",
+		"-bool6=false",
 		"--int=22",
 		"--int8=-8",
 		"--int16=-16",
@@ -238,6 +244,15 @@ func testParse(f *FlagSet, t *testing.T) {
 	}
 	if *bool3Flag != false {
 		t.Error("bool3 flag should be false, is ", *bool3Flag)
+	}
+	if *bool4Flag != true {
+		t.Error("bool4 flag should be true, is ", *bool4Flag)
+	}
+	if *bool5Flag != true {
+		t.Error("bool5 flag should be true, is ", *bool5Flag)
+	}
+	if *bool6Flag != false {
+		t.Error("bool6 flag should be false, is ", *bool6Flag)
 	}
 	if *intFlag != 22 {
 		t.Error("int flag should be 22, is ", *intFlag)
@@ -365,8 +380,8 @@ func testParseAll(f *FlagSet, t *testing.T) {
 	f.StringP("stringy", "y", "0", "string value")
 	f.Lookup("stringx").NoOptDefVal = "1"
 	args := []string{
-		"-ab",
-		"-cs=xx",
+		"-a", "-b", // "-ab" no-longer supported
+		"-c", "-s=xx", // "-cs=xx" no-longer supported
 		"--stringz=something",
 		"-d=true",
 		"-x",
@@ -422,8 +437,8 @@ func testParseWithUnknownFlags(f *FlagSet, t *testing.T) {
 	f.StringP("stringo", "o", "0", "string value")
 	f.Lookup("stringx").NoOptDefVal = "1"
 	args := []string{
-		"-ab",
-		"-cs=xx",
+		"-a", "-b", // "-ab" no-longer supported
+		"-c", "-s=xx", // "-cs=xx" no-longer supported
 		"--stringz=something",
 		"--unknown1",
 		"unknown1Value",
@@ -478,102 +493,6 @@ func testParseWithUnknownFlags(f *FlagSet, t *testing.T) {
 		t.Errorf("Got:  %v", got)
 		t.Errorf("Want: %v", want)
 	}
-}
-
-func TestShorthand(t *testing.T) {
-	f := NewFlagSet("shorthand", ContinueOnError)
-	if f.Parsed() {
-		t.Error("f.Parse() = true before Parse")
-	}
-	boolaFlag := f.BoolP("boola", "a", false, "bool value")
-	boolbFlag := f.BoolP("boolb", "b", false, "bool2 value")
-	boolcFlag := f.BoolP("boolc", "c", false, "bool3 value")
-	booldFlag := f.BoolP("boold", "d", false, "bool4 value")
-	stringaFlag := f.StringP("stringa", "s", "0", "string value")
-	stringzFlag := f.StringP("stringz", "z", "0", "string value")
-	extra := "interspersed-argument"
-	notaflag := "--i-look-like-a-flag"
-	args := []string{
-		"-ab",
-		extra,
-		"-cs",
-		"hello",
-		"-z=something",
-		"-d=true",
-		"--",
-		notaflag,
-	}
-	f.SetOutput(ioutil.Discard)
-	if err := f.Parse(args); err != nil {
-		t.Error("expected no error, got ", err)
-	}
-	if !f.Parsed() {
-		t.Error("f.Parse() = false after Parse")
-	}
-	if *boolaFlag != true {
-		t.Error("boola flag should be true, is ", *boolaFlag)
-	}
-	if *boolbFlag != true {
-		t.Error("boolb flag should be true, is ", *boolbFlag)
-	}
-	if *boolcFlag != true {
-		t.Error("boolc flag should be true, is ", *boolcFlag)
-	}
-	if *booldFlag != true {
-		t.Error("boold flag should be true, is ", *booldFlag)
-	}
-	if *stringaFlag != "hello" {
-		t.Error("stringa flag should be `hello`, is ", *stringaFlag)
-	}
-	if *stringzFlag != "something" {
-		t.Error("stringz flag should be `something`, is ", *stringzFlag)
-	}
-	if len(f.Args()) != 2 {
-		t.Error("expected one argument, got", len(f.Args()))
-	} else if f.Args()[0] != extra {
-		t.Errorf("expected argument %q got %q", extra, f.Args()[0])
-	} else if f.Args()[1] != notaflag {
-		t.Errorf("expected argument %q got %q", notaflag, f.Args()[1])
-	}
-	if f.ArgsLenAtDash() != 1 {
-		t.Errorf("expected argsLenAtDash %d got %d", f.ArgsLenAtDash(), 1)
-	}
-}
-
-func TestShorthandLookup(t *testing.T) {
-	f := NewFlagSet("shorthand", ContinueOnError)
-	if f.Parsed() {
-		t.Error("f.Parse() = true before Parse")
-	}
-	f.BoolP("boola", "a", false, "bool value")
-	f.BoolP("boolb", "b", false, "bool2 value")
-	args := []string{
-		"-ab",
-	}
-	f.SetOutput(ioutil.Discard)
-	if err := f.Parse(args); err != nil {
-		t.Error("expected no error, got ", err)
-	}
-	if !f.Parsed() {
-		t.Error("f.Parse() = false after Parse")
-	}
-	flag := f.ShorthandLookup("a")
-	if flag == nil {
-		t.Errorf("f.ShorthandLookup(\"a\") returned nil")
-	}
-	if flag.Name != "boola" {
-		t.Errorf("f.ShorthandLookup(\"a\") found %q instead of \"boola\"", flag.Name)
-	}
-	flag = f.ShorthandLookup("")
-	if flag != nil {
-		t.Errorf("f.ShorthandLookup(\"\") did not return nil")
-	}
-	defer func() {
-		recover()
-	}()
-	flag = f.ShorthandLookup("ab")
-	// should NEVER get here. lookup should panic. defer'd func should recover it.
-	t.Errorf("f.ShorthandLookup(\"ab\") did not panic")
 }
 
 func TestParse(t *testing.T) {
@@ -841,7 +760,7 @@ func TestUserDefined(t *testing.T) {
 	flags.Init("test", ContinueOnError)
 	var v flagVar
 	flags.VarP(&v, "v", "v", "usage")
-	if err := flags.Parse([]string{"--v=1", "-v2", "-v", "3"}); err != nil {
+	if err := flags.Parse([]string{"--v=1", "-v=2", "-v", "3"}); err != nil {
 		t.Error(err)
 	}
 	if len(v) != 3 {
