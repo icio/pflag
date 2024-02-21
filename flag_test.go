@@ -237,7 +237,7 @@ func testParse(f *FlagSet, t *testing.T) {
 		t.Error("bool2 flag should be true, is ", *bool2Flag)
 	}
 	if *bool3Flag != false {
-		t.Error("bool3 flag should be false, is ", *bool2Flag)
+		t.Error("bool3 flag should be false, is ", *bool3Flag)
 	}
 	if *intFlag != 22 {
 		t.Error("int flag should be 22, is ", *intFlag)
